@@ -13,6 +13,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="Jellyfin.Plugin.AppleMusic.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="AngleSharp" Version="1.3.0" />
     <PackageReference Include="AngleSharp.XPath" Version="2.0.5" />
     <PackageReference Include="Jellyfin.Controller" Version="10.11.0" />

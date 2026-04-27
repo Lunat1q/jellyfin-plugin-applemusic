@@ -90,17 +90,37 @@ public class AlbumImageProvider : IRemoteImageProvider
 
         _logger.LogInformation("Found {Count} search results using term {SearchTerm}", searchResults.Count, term);
 
-        return searchResults
+        var albumResults = searchResults
             .Where(sr => sr is ITunesAlbum amAlbum && !string.IsNullOrEmpty(amAlbum.ImageUrl))
-            .Select(amAlbum => new RemoteImageInfo
+            .Cast<ITunesAlbum>()
+            .ToList();
+
+        if (albumResults.Count == 0)
+        {
+            return new List<RemoteImageInfo>();
+        }
+
+        // Pick the result whose name is closest to the album name
+        var bestMatch = PluginUtils.GetBestMatch(albumResults, album.Name, a => a.Name);
+        if (bestMatch is null)
+        {
+            return new List<RemoteImageInfo>();
+        }
+
+        _logger.LogDebug("Best match for '{AlbumName}': '{MatchName}' (ID: {MatchId})", album.Name, bestMatch.Name, bestMatch.Id);
+
+        return new List<RemoteImageInfo>
+        {
+            new RemoteImageInfo
             {
                 Height = 1400,
                 Width = 1400,
                 ProviderName = Name,
-                ThumbnailUrl = PluginUtils.UpdateImageSize(amAlbum.ImageUrl!, "100x100cc"),
+                ThumbnailUrl = PluginUtils.UpdateImageSize(bestMatch.ImageUrl!, "100x100cc"),
                 Type = ImageType.Primary,
-                Url = PluginUtils.UpdateImageSize(amAlbum.ImageUrl!, "1400x1400cc"),
-            });
+                Url = PluginUtils.UpdateImageSize(bestMatch.ImageUrl!, "1400x1400cc"),
+            },
+        };
     }
 
     private static string GetSearchTerm(MusicAlbum album)
