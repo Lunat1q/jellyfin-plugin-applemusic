@@ -70,6 +70,35 @@ public class AlbumSearchTests
         var match = Assert.Single(results, r => r.Id == AlbumId);
         Assert.Equal(AlbumName, match.Name);
     }
+
+    [Fact]
+    public async Task SearchWithArtistPrefixed_FallsBackToAlbumNameOnly()
+    {
+        // Simulate what Jellyfin does for VA albums: prepend a track artist to the album name
+        var pollutedTerm = "ScaryON Atomic Heart, Vol.3 (Original Game Soundtrack)";
+        var expectedAlbumName = "Atomic Heart, Vol.3 (Original Game Soundtrack)";
+
+        // Act - search with the polluted term (should find nothing)
+        var pollutedResults = await _metadataSource.SearchAsync(pollutedTerm, ItemType.Album, CancellationToken.None);
+
+        _output.WriteLine($"Polluted search '{pollutedTerm}': {pollutedResults.Count} results");
+        foreach (var result in pollutedResults)
+        {
+            _output.WriteLine($"  - {result.Name} (ID: {result.Id})");
+        }
+
+        // Act - search with just the album name (should find it)
+        var cleanResults = await _metadataSource.SearchAsync(expectedAlbumName, ItemType.Album, CancellationToken.None);
+
+        _output.WriteLine($"Clean search '{expectedAlbumName}': {cleanResults.Count} results");
+        foreach (var result in cleanResults)
+        {
+            _output.WriteLine($"  - {result.Name} (ID: {result.Id})");
+        }
+
+        // The clean search should return results
+        Assert.NotEmpty(cleanResults);
+    }
 }
 
 internal static class LoggingExtensions

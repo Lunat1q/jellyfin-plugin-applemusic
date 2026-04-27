@@ -81,6 +81,13 @@ public class AlbumImageProvider : IRemoteImageProvider
         _logger.LogInformation("Apple Music album ID is not available, using search with term {SearchTerm}", term);
         var searchResults = await _metadataSource.SearchAsync(term, ItemType.Album, cancellationToken);
 
+        // Fallback: if artist+album search yields no results, retry with album name only
+        if (searchResults.Count == 0 && album.AlbumArtists.Count > 0 && !string.IsNullOrEmpty(album.AlbumArtists[0]))
+        {
+            _logger.LogInformation("No results found with artist prefix, retrying with album name only: {AlbumName}", album.Name);
+            searchResults = await _metadataSource.SearchAsync(album.Name, ItemType.Album, cancellationToken);
+        }
+
         _logger.LogInformation("Found {Count} search results using term {SearchTerm}", searchResults.Count, term);
 
         return searchResults
