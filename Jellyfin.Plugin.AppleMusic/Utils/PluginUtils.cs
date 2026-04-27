@@ -132,10 +132,9 @@ public static class PluginUtils
             totalMatched += match.Length;
         }
 
-        int totalLength = a.Length + b.Length;
-
-        // SequenceMatcher-style ratio: 2*M / T
-        double ratio = 2.0 * totalMatched / totalLength;
+        // Coverage: what fraction of the search term (a) was matched in the candidate (b).
+        // This avoids penalising longer candidates that fully contain the search.
+        double coverage = (double)totalMatched / a.Length;
 
         // Prefix bonus: matching characters at the start contribute extra.
         int prefixLen = 0;
@@ -145,11 +144,12 @@ public static class PluginUtils
             prefixLen++;
         }
 
-        int maxLen = Math.Max(a.Length, b.Length);
-        double prefixRatio = (double)prefixLen / maxLen;
+        double prefixRatio = (double)prefixLen / a.Length;
 
-        // Blend: 80% sequence matching, 20% prefix match.
-        return (0.8 * ratio) + (0.2 * prefixRatio);
+        // Blend: 50% coverage, 50% prefix.
+        // Prefix-matching characters effectively count twice (once in coverage,
+        // once in prefixRatio), giving the start of the string more weight.
+        return (0.5 * coverage) + (0.5 * prefixRatio);
     }
 
     /// <summary>
