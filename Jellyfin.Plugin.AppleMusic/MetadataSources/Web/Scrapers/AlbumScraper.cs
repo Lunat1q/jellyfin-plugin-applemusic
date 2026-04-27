@@ -26,6 +26,7 @@ public class AlbumScraper : IScraper<MusicAlbum>
     private const string AlbumDetailXPath = "//div[@data-testid='container-detail-header']";
     private const string AlbumNameXPath = "//h1[@data-testid='non-editable-product-title']";
     private const string AlbumArtistXPath = "//a[@data-testid='click-action']";
+    private const string AlbumSubtitlesXPath = "//div[@data-testid='product-subtitles']";
     private const string AboutXPath = "//p[@data-testid='truncate-text']";
     private const string AlbumDescriptionXPath = "//p[@data-testid='tracklist-footer-description']";
 
@@ -66,25 +67,38 @@ public class AlbumScraper : IScraper<MusicAlbum>
         }
 
         var artistNodes = document.Body.SelectNodes(AlbumDetailXPath + AlbumArtistXPath);
-        if (artistNodes is null || artistNodes.Count == 0)
-        {
-            _logger.LogTrace("No album artists found");
-            return null;
-        }
-
-        _logger.LogDebug("Found {Count} artist nodes in album", artistNodes.Count);
-
         var artists = new List<ITunesArtist>();
-        foreach (var node in artistNodes)
-        {
-            if (node is not IHtmlAnchorElement artistElem)
-            {
-                _logger.LogTrace("Node is not an anchor element, skipping");
-                continue;
-            }
 
-            _logger.LogTrace("Adding artist with url {Url}", artistElem.Href);
-            artists.Add(new ITunesArtist { Name = artistElem.TextContent, Url = artistElem.Href, });
+        if (artistNodes is not null && artistNodes.Count > 0)
+        {
+            _logger.LogDebug("Found {Count} artist nodes in album", artistNodes.Count);
+
+            foreach (var node in artistNodes)
+            {
+                if (node is not IHtmlAnchorElement artistElem)
+                {
+                    _logger.LogTrace("Node is not an anchor element, skipping");
+                    continue;
+                }
+
+                _logger.LogTrace("Adding artist with url {Url}", artistElem.Href);
+                artists.Add(new ITunesArtist { Name = artistElem.TextContent, Url = artistElem.Href, });
+            }
+        }
+        else
+        {
+            // Fallback: extract artist name from the subtitles text (e.g. "Various Artists" compilations)
+            var subtitleText = document.Body.SelectSingleNode(AlbumDetailXPath + AlbumSubtitlesXPath)?.TextContent?.Trim();
+            if (!string.IsNullOrEmpty(subtitleText))
+            {
+                _logger.LogDebug("No artist links found, using subtitle text: {SubtitleText}", subtitleText);
+                artists.Add(new ITunesArtist { Name = subtitleText });
+            }
+            else
+            {
+                _logger.LogTrace("No album artists found");
+                return null;
+            }
         }
 
         _logger.LogDebug("Parsed {Count} artists from album", artists.Count);
