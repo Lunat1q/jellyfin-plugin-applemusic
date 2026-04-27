@@ -133,6 +133,7 @@ public class AlbumScraper : IScraper<MusicAlbum>
         if (!match.Groups["date"].Success || !match.Groups["productionYear"].Success)
         {
             _logger.LogDebug("Failed to parse album details {Details}", details);
+            return null;
         }
 
         var date = DateTime.ParseExact(match.Groups["date"].Value, "MMMM d, yyyy", DateTimeFormatInfo.InvariantInfo);
