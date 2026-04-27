@@ -9,7 +9,7 @@ namespace Jellyfin.Plugin.AppleMusic.ExternalIds;
 /// <summary>
 /// Apple Music album artist external ID.
 /// </summary>
-public class ITunesArtistExternalId : IExternalId
+public class ITunesArtistExternalId : IExternalIdWithUrlFormat
 {
     /// <inheritdoc />
     public string ProviderName => PluginUtils.PluginName;
