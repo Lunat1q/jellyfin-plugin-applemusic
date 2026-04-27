@@ -60,8 +60,15 @@ public class AlbumMetadataProvider : IRemoteMetadataProvider<MusicAlbum, AlbumIn
 
         _logger.LogInformation("Apple Music album ID was not provided, using search");
 
-        var searchTerm = searchInfo.Name;
+        var searchTerm = GetSearchTerm(searchInfo);
         var searchResults = await _metadataSource.SearchAsync(searchTerm, ItemType.Album, cancellationToken);
+
+        // Fallback: if artist+album search yields no results, retry with album name only
+        if (searchResults.Count == 0 && !string.Equals(searchTerm, searchInfo.Name, StringComparison.Ordinal))
+        {
+            _logger.LogInformation("No results found with artist prefix, retrying with album name only: {AlbumName}", searchInfo.Name);
+            searchResults = await _metadataSource.SearchAsync(searchInfo.Name, ItemType.Album, cancellationToken);
+        }
 
         _logger.LogInformation("Found {Count} search results using term {SearchTerm}", searchResults.Count, searchTerm);
 
@@ -131,7 +138,7 @@ public class AlbumMetadataProvider : IRemoteMetadataProvider<MusicAlbum, AlbumIn
         }
 
         var albumArtist = albumData.Artists.FirstOrDefault();
-        if (albumArtist is not null)
+        if (albumArtist is not null && !string.IsNullOrWhiteSpace(albumArtist.Id))
         {
             _logger.LogDebug("Setting provider ID for album artist {ArtistName}", albumArtist.Name);
             metadataResult.Item.SetProviderId(nameof(ProviderKey.ITunesAlbumArtist), albumArtist.Id);
@@ -151,6 +158,33 @@ public class AlbumMetadataProvider : IRemoteMetadataProvider<MusicAlbum, AlbumIn
     private static MetadataResult<MusicAlbum> EmptyMetadataResult()
     {
         return new MetadataResult<MusicAlbum> { HasMetadata = false };
+    }
+
+    private static string GetSearchTerm(AlbumInfo info)
+    {
+        var artist = GetArtistName(info);
+        if (string.IsNullOrWhiteSpace(artist))
+        {
+            return info.Name;
+        }
+
+        return $"{artist} {info.Name}";
+    }
+
+    private static string GetArtistName(AlbumInfo info)
+    {
+        if (info.AlbumArtists is { Count: > 0 } albumArtists && !string.IsNullOrWhiteSpace(albumArtists[0]))
+        {
+            return albumArtists[0];
+        }
+
+        // Fallback: pick artist from first track when album-level artist is missing
+        if (info.SongInfos is { Count: > 0 } songs && songs[0].Artists is { Count: > 0 } trackArtists && !string.IsNullOrWhiteSpace(trackArtists[0]))
+        {
+            return trackArtists[0];
+        }
+
+        return string.Empty;
     }
 
     private async Task<List<RemoteSearchResult>> GetAlbumById(string appleMusicId, CancellationToken cancellationToken)
