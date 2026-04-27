@@ -89,7 +89,10 @@ public static class PluginUtils
     }
 
     /// <summary>
-    /// Calculate a prefix-weighted similarity score between two strings.
+    /// Calculate a prefix-weighted similarity score between two strings using
+    /// the Ratcliff/Obershelp "gestalt pattern matching" algorithm (same approach
+    /// as Python's <c>difflib.SequenceMatcher</c>), blended with a prefix bonus
+    /// so that matches at the start of the string score higher.
     /// Returns a value between 0.0 (no match) and 1.0 (exact match).
     /// </summary>
     /// <param name="a">First string.</param>
@@ -107,23 +110,129 @@ public static class PluginUtils
             return 1.0;
         }
 
-        int maxLen = Math.Max(a.Length, b.Length);
-        int minLen = Math.Min(a.Length, b.Length);
+        // Build character-to-positions index for b (reused across recursive calls).
+        var b2j = new Dictionary<char, List<int>>();
+        for (int j = 0; j < b.Length; j++)
+        {
+            if (!b2j.TryGetValue(b[j], out var positions))
+            {
+                positions = new List<int>();
+                b2j[b[j]] = positions;
+            }
 
-        // Prefix match: how many characters match from the start
+            positions.Add(j);
+        }
+
+        var matches = new List<(int PosA, int PosB, int Length)>();
+        CollectMatchingBlocks(a, 0, a.Length, b, 0, b.Length, b2j, matches);
+
+        int totalMatched = 0;
+        foreach (var match in matches)
+        {
+            totalMatched += match.Length;
+        }
+
+        int totalLength = a.Length + b.Length;
+
+        // SequenceMatcher-style ratio: 2*M / T
+        double ratio = 2.0 * totalMatched / totalLength;
+
+        // Prefix bonus: matching characters at the start contribute extra.
         int prefixLen = 0;
+        int minLen = Math.Min(a.Length, b.Length);
         while (prefixLen < minLen && a[prefixLen] == b[prefixLen])
         {
             prefixLen++;
         }
 
-        double prefixScore = (double)prefixLen / maxLen;
+        int maxLen = Math.Max(a.Length, b.Length);
+        double prefixRatio = (double)prefixLen / maxLen;
 
-        // Length similarity
-        double lengthScore = (double)minLen / maxLen;
+        // Blend: 80% sequence matching, 20% prefix match.
+        return (0.8 * ratio) + (0.2 * prefixRatio);
+    }
 
-        // Weighted: prefix contributes 70%, length similarity 30%
-        return (0.7 * prefixScore) + (0.3 * lengthScore);
+    /// <summary>
+    /// Find the longest contiguous matching block between <paramref name="a"/>[alo..ahi)
+    /// and <paramref name="b"/>[blo..bhi) using an indexed scan (SequenceMatcher approach).
+    /// </summary>
+    private static (int PosA, int PosB, int Length) FindLongestMatch(
+        string a,
+        int alo,
+        int ahi,
+        string b,
+        int blo,
+        int bhi,
+        Dictionary<char, List<int>> b2j)
+    {
+        int besti = alo, bestj = blo, bestSize = 0;
+        var j2Len = new Dictionary<int, int>();
+
+        for (int i = alo; i < ahi; i++)
+        {
+            var newJ2Len = new Dictionary<int, int>();
+            if (b2j.TryGetValue(a[i], out var positions))
+            {
+                foreach (int j in positions)
+                {
+                    if (j < blo)
+                    {
+                        continue;
+                    }
+
+                    if (j >= bhi)
+                    {
+                        break;
+                    }
+
+                    int k = (j2Len.TryGetValue(j - 1, out int prev) ? prev : 0) + 1;
+                    newJ2Len[j] = k;
+                    if (k > bestSize)
+                    {
+                        besti = i - k + 1;
+                        bestj = j - k + 1;
+                        bestSize = k;
+                    }
+                }
+            }
+
+            j2Len = newJ2Len;
+        }
+
+        return (besti, bestj, bestSize);
+    }
+
+    /// <summary>
+    /// Recursively collect all non-overlapping matching blocks between two strings
+    /// (equivalent to <c>SequenceMatcher.get_matching_blocks()</c>).
+    /// </summary>
+    private static void CollectMatchingBlocks(
+        string a,
+        int alo,
+        int ahi,
+        string b,
+        int blo,
+        int bhi,
+        Dictionary<char, List<int>> b2j,
+        List<(int PosA, int PosB, int Length)> result)
+    {
+        var (posA, posB, length) = FindLongestMatch(a, alo, ahi, b, blo, bhi, b2j);
+        if (length == 0)
+        {
+            return;
+        }
+
+        if (alo < posA && blo < posB)
+        {
+            CollectMatchingBlocks(a, alo, posA, b, blo, posB, b2j, result);
+        }
+
+        result.Add((posA, posB, length));
+
+        if (posA + length < ahi && posB + length < bhi)
+        {
+            CollectMatchingBlocks(a, posA + length, ahi, b, posB + length, bhi, b2j, result);
+        }
     }
 
     private static string NormalizeForComparison(string input)

@@ -58,4 +58,38 @@ public class BestMatchTests
         var result = PluginUtils.GetBestMatch(new[] { "only one" }, "test", s => s);
         Assert.Equal("only one", result);
     }
+
+    [Fact]
+    public void GetBestMatch_PicksCorrectVolume_FromMultipleVolumes()
+    {
+        var items = new[]
+        {
+            "Atomic Heart, Vol. 3 (From \"Atomic Heart\")",
+            "Atomic Heart, Vol. 4 (From \"Atomic Heart\")",
+            "Atomic Heart, Vol. 5 (From \"Atomic Heart\")",
+            "Atomic Heart, Vol. 1 (From \"Atomic Heart\")",
+            "Atomic Heart, Vol. 2 (From \"Atomic Heart\")",
+        };
+
+        var best = PluginUtils.GetBestMatch(items, "Atomic Heart (Original Game Soundtrack) Vol.1", name => name);
+
+        Assert.Equal("Atomic Heart, Vol. 1 (From \"Atomic Heart\")", best);
+    }
+
+    [Fact]
+    public void GetBestMatch_PicksCorrectVolume_WithMixedSubtitles()
+    {
+        var items = new[]
+        {
+            "Atomic Heart, Vol. 3 (From \"Atomic Heart\")",
+            "Atomic Heart, Vol. 4 (From \"Atomic Heart\")",
+            "Atomic Heart, Vol. 5 (From \"Atomic Heart\")",
+            "Atomic Heart, Vol. 1 (Original Game Soundtrack)",
+            "Atomic Heart, Vol. 2 (Original Game Soundtrack from \"Atomic Heart\")",
+        };
+
+        var best = PluginUtils.GetBestMatch(items, "Atomic Heart, Vol.2 (Original Game Soundtrack)", name => name);
+
+        Assert.Equal("Atomic Heart, Vol. 2 (Original Game Soundtrack from \"Atomic Heart\")", best);
+    }
 }
